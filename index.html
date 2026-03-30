@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ManaBox CSV Filter</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Outfit:wght@300;500;700&display=swap');
+
+  :root {
+    --bg: #0e0e12;
+    --surface: #16161d;
+    --surface2: #1e1e28;
+    --border: #2a2a38;
+    --text: #d4d4e0;
+    --text-dim: #7a7a90;
+    --accent: #c9a227;
+    --accent-dim: #c9a22730;
+    --red: #d44040;
+    --red-dim: #d4404020;
+    --green: #40b87a;
+    --green-dim: #40b87a20;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Outfit', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 2rem 1rem;
+  }
+
+  .container { max-width: 720px; width: 100%; }
+  h1 { font-size: 1.6rem; font-weight: 700; letter-spacing: -0.02em; margin-bottom: 0.25rem; }
+  h1 span { color: var(--accent); }
+  .subtitle { color: var(--text-dim); font-size: 0.85rem; font-weight: 300; margin-bottom: 2rem; }
+
+  .dropzone {
+    border: 2px dashed var(--border); border-radius: 12px; padding: 3rem 2rem;
+    text-align: center; cursor: pointer; transition: all 0.2s;
+    background: var(--surface); position: relative;
+  }
+  .dropzone:hover, .dropzone.dragover { border-color: var(--accent); background: var(--accent-dim); }
+  .dropzone.has-file { border-color: var(--green); border-style: solid; background: var(--green-dim); }
+  .dropzone-icon { font-size: 2rem; margin-bottom: 0.5rem; }
+  .dropzone-text { font-weight: 500; margin-bottom: 0.25rem; }
+  .dropzone-hint { font-size: 0.8rem; color: var(--text-dim); }
+  .dropzone input[type="file"] { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+
+  .filters {
+    margin-top: 1.5rem; background: var(--surface);
+    border: 1px solid var(--border); border-radius: 12px; padding: 1.25rem;
+  }
+  .filters h2 {
+    font-size: 0.8rem; font-weight: 600; text-transform: uppercase;
+    letter-spacing: 0.08em; color: var(--text-dim); margin-bottom: 1rem;
+  }
+  .filter-row { display: flex; align-items: center; gap: 0.75rem; padding: 0.6rem 0; }
+  .filter-row + .filter-row { border-top: 1px solid var(--border); }
+
+  .toggle { position: relative; width: 40px; height: 22px; flex-shrink: 0; }
+  .toggle input { opacity: 0; width: 0; height: 0; }
+  .toggle-track {
+    position: absolute; inset: 0; background: var(--surface2);
+    border-radius: 11px; border: 1px solid var(--border); cursor: pointer; transition: all 0.2s;
+  }
+  .toggle-track::after {
+    content: ''; position: absolute; top: 2px; left: 2px;
+    width: 16px; height: 16px; border-radius: 50%;
+    background: var(--text-dim); transition: all 0.2s;
+  }
+  .toggle input:checked + .toggle-track { background: var(--accent-dim); border-color: var(--accent); }
+  .toggle input:checked + .toggle-track::after { transform: translateX(18px); background: var(--accent); }
+
+  .filter-label { font-size: 0.9rem; font-weight: 500; }
+  .filter-label code {
+    font-family: 'JetBrains Mono', monospace; font-size: 0.8rem;
+    background: var(--surface2); padding: 0.1em 0.4em;
+    border-radius: 4px; border: 1px solid var(--border); color: var(--accent);
+  }
+
+  .actions { margin-top: 1.5rem; display: flex; gap: 1rem; align-items: center; }
+  button.primary {
+    font-family: 'Outfit', sans-serif; font-size: 0.9rem; font-weight: 600;
+    padding: 0.7rem 1.8rem; border-radius: 8px; border: none; cursor: pointer;
+    background: var(--accent); color: var(--bg); transition: all 0.15s;
+  }
+  button.primary:hover:not(:disabled) { filter: brightness(1.15); transform: translateY(-1px); }
+  button.primary:disabled { opacity: 0.35; cursor: not-allowed; }
+
+  .stats {
+    margin-top: 1.5rem; background: var(--surface);
+    border: 1px solid var(--border); border-radius: 12px; padding: 1.25rem; display: none;
+  }
+  .stats.visible { display: block; }
+  .stats h2 {
+    font-size: 0.8rem; font-weight: 600; text-transform: uppercase;
+    letter-spacing: 0.08em; color: var(--text-dim); margin-bottom: 1rem;
+  }
+  .stat-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.75rem; }
+  .stat-card { background: var(--surface2); border-radius: 8px; padding: 0.75rem; text-align: center; }
+  .stat-value { font-family: 'JetBrains Mono', monospace; font-size: 1.4rem; font-weight: 600; }
+  .stat-value.total { color: var(--text); }
+  .stat-value.removed { color: var(--red); }
+  .stat-value.kept { color: var(--green); }
+  .stat-label { font-size: 0.75rem; color: var(--text-dim); margin-top: 0.2rem; }
+  .detail-rows {
+    margin-top: 0.75rem; font-family: 'JetBrains Mono', monospace;
+    font-size: 0.78rem; color: var(--text-dim); display: flex; flex-direction: column; gap: 0.2rem;
+  }
+  .detail-rows span.val { color: var(--red); }
+  .footer { margin-top: 3rem; font-size: 0.72rem; color: var(--text-dim); text-align: center; opacity: 0.5; }
+</style>
+</head>
+<body>
+
+<div class="container">
+  <h1><span>⚙</span> ManaBox CSV Filter</h1>
+  <p class="subtitle">CSV laden → Filter auswählen → gefilterte CSV herunterladen</p>
+
+  <div class="dropzone" id="dropzone">
+    <div class="dropzone-icon">📄</div>
+    <div class="dropzone-text" id="dropzone-text">ManaBox CSV hier ablegen</div>
+    <div class="dropzone-hint">oder klicken zum Auswählen</div>
+    <input type="file" accept=".csv" id="file-input">
+  </div>
+
+  <div class="filters">
+    <h2>Filter (Zeilen entfernen wo …)</h2>
+    <div class="filter-row">
+      <label class="toggle">
+        <input type="checkbox" id="f-list" checked>
+        <span class="toggle-track"></span>
+      </label>
+      <span class="filter-label"><code>Binder Type</code> = list</span>
+    </div>
+    <div class="filter-row">
+      <label class="toggle">
+        <input type="checkbox" id="f-misprint" checked>
+        <span class="toggle-track"></span>
+      </label>
+      <span class="filter-label"><code>Misprint</code> = true</span>
+    </div>
+  </div>
+
+  <div class="actions">
+    <button class="primary" id="btn-run" disabled>Filtern & Download</button>
+  </div>
+
+  <div class="stats" id="stats">
+    <h2>Ergebnis</h2>
+    <div class="stat-grid">
+      <div class="stat-card">
+        <div class="stat-value total" id="s-total">0</div>
+        <div class="stat-label">Gesamt</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value removed" id="s-removed">0</div>
+        <div class="stat-label">Entfernt</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value kept" id="s-kept">0</div>
+        <div class="stat-label">Behalten</div>
+      </div>
+    </div>
+    <div class="detail-rows" id="detail-rows"></div>
+  </div>
+
+  <div class="footer">Läuft komplett im Browser – keine Daten werden hochgeladen.</div>
+</div>
+
+<script>
+const dropzone = document.getElementById('dropzone');
+const dropzoneText = document.getElementById('dropzone-text');
+const fileInput = document.getElementById('file-input');
+const btnRun = document.getElementById('btn-run');
+const statsEl = document.getElementById('stats');
+
+let csvText = null;
+let fileName = '';
+
+fileInput.addEventListener('change', (e) => {
+  if (e.target.files[0]) loadFile(e.target.files[0]);
+});
+
+dropzone.addEventListener('dragover', (e) => {
+  e.preventDefault();
+  dropzone.classList.add('dragover');
+});
+
+dropzone.addEventListener('dragleave', () => {
+  dropzone.classList.remove('dragover');
+});
+
+dropzone.addEventListener('drop', (e) => {
+  e.preventDefault();
+  dropzone.classList.remove('dragover');
+  if (e.dataTransfer.files[0]) loadFile(e.dataTransfer.files[0]);
+});
+
+function loadFile(file) {
+  fileName = file.name.replace(/\.csv$/i, '');
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    csvText = e.target.result;
+    dropzoneText.textContent = file.name;
+    dropzone.classList.add('has-file');
+    btnRun.disabled = false;
+  };
+  reader.readAsText(file);
+}
+
+function parseCSV(text) {
+  const lines = [];
+  let current = '';
+  let inQuotes = false;
+
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (ch === '"') {
+      if (inQuotes && text[i + 1] === '"') { current += '"'; i++; }
+      else inQuotes = !inQuotes;
+    } else if ((ch === '\n' || ch === '\r') && !inQuotes) {
+      if (current.trim()) lines.push(current);
+      current = '';
+      if (ch === '\r' && text[i + 1] === '\n') i++;
+    } else {
+      current += ch;
+    }
+  }
+  if (current.trim()) lines.push(current);
+
+  return lines.map(line => {
+    const fields = [];
+    let field = '';
+    let q = false;
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i];
+      if (ch === '"') {
+        if (q && line[i + 1] === '"') { field += '"'; i++; }
+        else q = !q;
+      } else if (ch === ',' && !q) {
+        fields.push(field);
+        field = '';
+      } else {
+        field += ch;
+      }
+    }
+    fields.push(field);
+    return fields;
+  });
+}
+
+function toCSVLine(fields) {
+  return fields.map(f => {
+    if (f.includes(',') || f.includes('"') || f.includes('\n')) {
+      return '"' + f.replace(/"/g, '""') + '"';
+    }
+    return f;
+  }).join(',');
+}
+
+btnRun.addEventListener('click', () => {
+  if (!csvText) return;
+
+  const rows = parseCSV(csvText);
+  if (rows.length < 2) return;
+
+  const header = rows[0];
+  const colIndex = {};
+  header.forEach((h, i) => colIndex[h.trim()] = i);
+
+  const binderTypeIdx = colIndex['Binder Type'];
+  const misprintIdx = colIndex['Misprint'];
+
+  const filterList = document.getElementById('f-list').checked;
+  const filterMisprint = document.getElementById('f-misprint').checked;
+
+  let removedList = 0;
+  let removedMisprint = 0;
+  const kept = [];
+
+  for (let i = 1; i < rows.length; i++) {
+    const row = rows[i];
+    let remove = false;
+
+    if (filterList && binderTypeIdx !== undefined && row[binderTypeIdx]?.trim() === 'list') {
+      removedList++;
+      remove = true;
+    }
+
+    if (filterMisprint && misprintIdx !== undefined && row[misprintIdx]?.trim().toLowerCase() === 'true') {
+      removedMisprint++;
+      remove = true;
+    }
+
+    if (!remove) kept.push(row);
+  }
+
+  const total = rows.length - 1;
+  const removed = total - kept.length;
+
+  document.getElementById('s-total').textContent = total.toLocaleString('de-DE');
+  document.getElementById('s-removed').textContent = removed.toLocaleString('de-DE');
+  document.getElementById('s-kept').textContent = kept.toLocaleString('de-DE');
+
+  const details = [];
+  if (filterList) details.push(`Binder Type = list: <span class="val">${removedList}</span>`);
+  if (filterMisprint) details.push(`Misprint = true: <span class="val">${removedMisprint}</span>`);
+  document.getElementById('detail-rows').innerHTML = details.join('<br>');
+  statsEl.classList.add('visible');
+
+  const output = [toCSVLine(header), ...kept.map(toCSVLine)].join('\n');
+  const blob = new Blob([output], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = fileName + '_filtered.csv';
+  a.click();
+  URL.revokeObjectURL(url);
+});
+</script>
+</body>
+</html>
